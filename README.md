@@ -1,2 +1,2 @@
-# Homosoil-Spatial-Interpolation
-Incorporation of feature distance searching into IDW and RFSI
+# 3Dsoilknn
+Incorporation of feature distance searching into knn with idw
