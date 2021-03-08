@@ -1,4 +1,25 @@
-
+#' @title FUNCTION_TITLE
+#' @description FUNCTION_DESCRIPTION
+#' @param soil.fun PARAM_DESCRIPTION
+#' @param spc_sf PARAM_DESCRIPTION
+#' @param pred_depth PARAM_DESCRIPTION
+#' @param depth_th PARAM_DESCRIPTION
+#' @param n PARAM_DESCRIPTION
+#' @param p PARAM_DESCRIPTION
+#' @param output PARAM_DESCRIPTION, Default: list("prediction", "preparation")
+#' @return OUTPUT_DESCRIPTION
+#' @details DETAILS
+#' @examples 
+#' \dontrun{
+#' if(interactive()){
+#'  #EXAMPLE1
+#'  }
+#' }
+#' @seealso 
+#'  \code{\link[dplyr]{mutate}},\code{\link[dplyr]{filter}},\code{\link[dplyr]{mutate-joins}},\code{\link[dplyr]{group_by}},\code{\link[dplyr]{summarise}}
+#' @rdname hs_knn_pred
+#' @export 
+#' @importFrom dplyr mutate filter left_join group_by summarise ungroup
 hs_knn_pred <- function(soil.fun, spc_sf, pred_depth, depth_th, n, p, output = list("prediction", "preparation")){
   output <- output[[1]]
   target.name <- all.vars(soil.fun)[1]
@@ -23,7 +44,38 @@ hs_knn_pred <- function(soil.fun, spc_sf, pred_depth, depth_th, n, p, output = l
 
 
 
-
+#' @title FUNCTION_TITLE
+#' @description FUNCTION_DESCRIPTION
+#' @param soil.fun PARAM_DESCRIPTION
+#' @param pred.data PARAM_DESCRIPTION
+#' @param obs.data PARAM_DESCRIPTION
+#' @param depth_th PARAM_DESCRIPTION
+#' @param n PARAM_DESCRIPTION
+#' @param p PARAM_DESCRIPTION, Default: 2
+#' @param min_obs PARAM_DESCRIPTION, Default: 10
+#' @param radius PARAM_DESCRIPTION, Default: NA
+#' @param output PARAM_DESCRIPTION, Default: list("prediction", "preparation")
+#' @return OUTPUT_DESCRIPTION
+#' @details DETAILS
+#' @examples 
+#' \dontrun{
+#' if(interactive()){
+#'  #EXAMPLE1
+#'  }
+#' }
+#' @seealso 
+#'  \code{\link[sf]{st_as_sf}}
+#'  \code{\link[purrr]{map}},\code{\link[purrr]{map2}}
+#'  \code{\link[nngeo]{st_nn}}
+#'  \code{\link[dplyr]{distinct}},\code{\link[dplyr]{filter}},\code{\link[dplyr]{group_split}},\code{\link[dplyr]{mutate}}
+#'  \code{\link[tibble]{rownames}}
+#' @rdname hs3D_knn
+#' @export 
+#' @importFrom sf st_as_sf
+#' @importFrom purrr map map2
+#' @importFrom nngeo st_nn
+#' @importFrom dplyr distinct filter group_split mutate
+#' @importFrom tibble rowid_to_column
 hs3D_knn <- function(soil.fun, pred.data, obs.data, depth_th, n, p = 2, min_obs = 10, radius = NA, output = list("prediction", "preparation")){
   output <- output[[1]]
   obs_sf <- sf::st_as_sf(obs.data, coords = c("x", "y"), remove = FALSE)
