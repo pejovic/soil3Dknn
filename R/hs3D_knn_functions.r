@@ -60,14 +60,14 @@ hs_knn_pred <- function(soil.fun, obs.data, pred_depth, depth_th, n, p, output =
 #'  \code{\link[nngeo]{st_nn}}
 #'  \code{\link[dplyr]{distinct}},\code{\link[dplyr]{filter}},\code{\link[dplyr]{group_split}},\code{\link[dplyr]{mutate}}
 #'  \code{\link[tibble]{rownames}}
-#' @rdname hs3D_knn
+#' @rdname soil3Dknn
 #' @export 
 #' @importFrom sf st_as_sf
 #' @importFrom purrr map map2
 #' @importFrom nngeo st_nn
 #' @importFrom dplyr distinct filter group_split mutate
 #' @importFrom tibble rowid_to_column
-hs3D_knn <- function(soil.fun, pred.data, obs.data, depth_th, n, p = 2, min_obs = 10, radius = NA, output = list("prediction", "preparation")){
+soil3Dknn <- function(soil.fun, pred.data, obs.data, depth_th, n, p = 2, min_obs = 10, radius = NA, output = list("prediction", "preparation")){
   output <- output[[1]]
   obs_sf <- sf::st_as_sf(obs.data, coords = c("x", "y"), remove = FALSE)
   pred_sf <- sf::st_as_sf(pred.data, coords = c("x", "y"), remove = FALSE)
