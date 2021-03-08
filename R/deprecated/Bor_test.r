@@ -21,6 +21,9 @@ load(here::here("data", "Bor", "covmaps.rda"))
 source(here::here("R","preprocessing.r"))
 
 
+devtools::install_github("pejovic/soil3Dknn")
+
+
 
 #================== Spatial references ===================================================================
 gk_7 <- "+proj=tmerc +lat_0=0 +lon_0=21 +k=0.9999 +x_0=7500000 +y_0=0 +ellps=bessel +datum=WGS84 +towgs84=574.027,170.175,401.545,4.88786,-0.66524,-13.24673,0.99999311067 +units=m"
