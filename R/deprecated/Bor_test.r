@@ -21,8 +21,6 @@ load(here::here("data", "Bor", "covmaps.rda"))
 source(here::here("R","preprocessing.r"))
 
 
-devtools::install_github("pejovic/soil3Dknn")
-
 
 
 #================== Spatial references ===================================================================

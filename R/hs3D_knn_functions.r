@@ -63,6 +63,7 @@ hs_knn_pred <- function(soil.fun, obs.data, pred_depth, depth_th, n, p, output =
 #' @importFrom sf st_as_sf
 #' @importFrom purrr map map2
 #' @importFrom nngeo st_nn
+#' @importFrom gower gower_dist gower_topn
 #' @importFrom dplyr distinct filter group_split mutate
 #' @importFrom tibble rowid_to_column
 soil3Dknn <- function(soil.fun, pred.data, obs.data, depth_th, n, p = 2, min_obs = 10, radius = NA, output = list("prediction", "preparation")){
@@ -85,7 +86,7 @@ soil3Dknn <- function(soil.fun, pred.data, obs.data, depth_th, n, p = 2, min_obs
   obs_list <- purrr::map(.x = obs_inds, .f = ~obs.data %>% dplyr::distinct(x, y, .keep_all = TRUE) %>% .[.x, ] %>% .$ID) %>% 
     purrr::map(.x = ., .f = ~dplyr::filter(obs.data[, c("ID", "Top", "Bottom", all.vars(soil.fun))], ID %in% .x))
   
-  gdist_list <- purrr::map2(.x = pred_depth, .y = obs_list, .f = ~gower_dist(x = .x, y = .y[, "depth"])) %>%
+  gdist_list <- purrr::map2(.x = pred_depth, .y = obs_list, .f = ~gower::gower_dist(x = .x, y = .y[, "depth"])) %>%
     purrr::map2(.x = ., .y = obs_list, .f = ~.x < depth_th/diff(range(.y$depth)))
 
   obs_list2 <- purrr::map2(.x = gdist_list, .y = obs_list, .f = ~.y[.x, ]) # Ovde se može dodati selekcija u okviru nekog buffer-a
@@ -101,13 +102,13 @@ soil3Dknn <- function(soil.fun, pred.data, obs.data, depth_th, n, p = 2, min_obs
   
   pred_list <- pred.data %>% tibble::rowid_to_column() %>% dplyr::group_split(rowid, .keep = FALSE)
 
-  gdist_list1 <- purrr::map2(.x = pred_list, .y = obs_list2, .f = ~gower_topn(x = .x[, cov.names], y = .y[, cov.names], n = dim(.y)[1]))
+  gdist_list1 <- purrr::map2(.x = pred_list, .y = obs_list2, .f = ~gower::gower_topn(x = .x[, cov.names], y = .y[, cov.names], n = dim(.y)[1]))
   
   obs_list3 <- purrr::map2(.x = obs_list2, .y = gdist_list1, .f = ~.x[.y$index, ]) %>%
     purrr::map2(.x = ., .y = gdist_list1, .f = ~dplyr::mutate(.x, gw = .y$distance[,1]))
 
   if(output == "prediction"){
-    prediction <- purrr::map2(.x = obs_list3, .y = pred_list, .f = ~hs_knn_pred(soil.fun = soil.fun, spc_sf = .x, pred_depth = .y$depth, depth_th = depth_th, n = n, p = p)) %>%
+    prediction <- purrr::map2(.x = obs_list3, .y = pred_list, .f = ~hs_knn_pred(soil.fun = soil.fun, spc_sf = .x, pred_depth = .y$depth, depth_th = depth_th, n = n, p = p, output = output)) %>%
       bind_rows()
     output <- rep(NA, length(pred_depth))
     output[!ex_obs] <- prediction$pred_mean
