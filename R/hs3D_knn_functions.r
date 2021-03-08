@@ -9,7 +9,6 @@
 #' @param output Output, Default: list("prediction", "preparation")
 #' @return Prediction or data frame
 #' @rdname hs_knn_pred
-#' @export 
 #' @importFrom dplyr mutate filter left_join group_by summarise ungroup
 hs_knn_pred <- function(soil.fun, obs.data, pred_depth, depth_th, n, p, output = list("prediction", "preparation")){
   output <- output[[1]]
