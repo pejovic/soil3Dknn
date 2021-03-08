@@ -44,7 +44,7 @@ hs_knn_pred <- function(soil.fun, obs.data, pred_depth, depth_th, n, p, output =
 #' @param min_obs Minimum observations at particular prediction depth, Default: 10
 #' @param radius Searching radius. , Default: NA
 #' @param output PARAM_DESCRIPTION, Default: list("prediction", "preparation")
-#' @return OUTPUT_DESCRIPTION
+#' @return prediction or data preparation
 #' @details DETAILS
 #' @examples 
 #' \dontrun{
@@ -52,12 +52,6 @@ hs_knn_pred <- function(soil.fun, obs.data, pred_depth, depth_th, n, p, output =
 #'  #EXAMPLE1
 #'  }
 #' }
-#' @seealso 
-#'  \code{\link[sf]{st_as_sf}}
-#'  \code{\link[purrr]{map}},\code{\link[purrr]{map2}}
-#'  \code{\link[nngeo]{st_nn}}
-#'  \code{\link[dplyr]{distinct}},\code{\link[dplyr]{filter}},\code{\link[dplyr]{group_split}},\code{\link[dplyr]{mutate}}
-#'  \code{\link[tibble]{rownames}}
 #' @rdname soil3Dknn
 #' @export 
 #' @importFrom sf st_as_sf
