@@ -34,7 +34,6 @@ hs_knn_pred <- function(soil.fun, obs.data, pred_depth, depth_th, n, p, output =
 }
 
 
-
 #' @title soil 3D knn
 #' @description Perform soil 3D knn
 #' @param soil.fun formula of soil target/predictors relations
