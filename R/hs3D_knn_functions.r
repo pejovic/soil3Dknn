@@ -1,31 +1,22 @@
-#' @title FUNCTION_TITLE
-#' @description FUNCTION_DESCRIPTION
-#' @param soil.fun PARAM_DESCRIPTION
-#' @param spc_sf PARAM_DESCRIPTION
-#' @param pred_depth PARAM_DESCRIPTION
-#' @param depth_th PARAM_DESCRIPTION
-#' @param n PARAM_DESCRIPTION
-#' @param p PARAM_DESCRIPTION
-#' @param output PARAM_DESCRIPTION, Default: list("prediction", "preparation")
-#' @return OUTPUT_DESCRIPTION
-#' @details DETAILS
-#' @examples 
-#' \dontrun{
-#' if(interactive()){
-#'  #EXAMPLE1
-#'  }
-#' }
-#' @seealso 
-#'  \code{\link[dplyr]{mutate}},\code{\link[dplyr]{filter}},\code{\link[dplyr]{mutate-joins}},\code{\link[dplyr]{group_by}},\code{\link[dplyr]{summarise}}
+#' @title Make prediction by IDW or prepare neighboring data: observations-distances
+#' @description Make prediction by IDW or prepare neighboring data: observations-distances
+#' @param soil.fun formula object that defines the relations target/predictors
+#' @param obs.data training data in the form of tidy soil data
+#' @param pred_depth prediction depth in cm
+#' @param depth_th depth treshold
+#' @param n number of observations used for idw
+#' @param p power of dist
+#' @param output Output, Default: list("prediction", "preparation")
+#' @return Prediction or data frame
 #' @rdname hs_knn_pred
 #' @export 
 #' @importFrom dplyr mutate filter left_join group_by summarise ungroup
-hs_knn_pred <- function(soil.fun, spc_sf, pred_depth, depth_th, n, p, output = list("prediction", "preparation")){
+hs_knn_pred <- function(soil.fun, obs.data, pred_depth, depth_th, n, p, output = list("prediction", "preparation")){
   output <- output[[1]]
   target.name <- all.vars(soil.fun)[1]
-  gdist = unique(spc_sf$gw)[1:n]
-  n_ids <- unique(spc_sf$ID)[1:n] %>% data.frame(ID = ., stringsAsFactors = FALSE)
-  spc_sf %>% dplyr::mutate(pred_top = pmax(pred_depth-depth_th, 0), pred_bot = pred_depth+depth_th) %>% 
+  gdist <- unique(obs.data$gw)[1:n]
+  n_ids <- unique(obs.data$ID)[1:n] %>% data.frame(ID = ., stringsAsFactors = FALSE)
+  obs.data <- obs.data %>% dplyr::mutate(pred_top = pmax(pred_depth-depth_th, 0), pred_bot = pred_depth+depth_th) %>% 
     dplyr::filter(Top < pred_bot, Bottom > pred_top) %>% 
     mutate(dh = case_when(pred_top >= Top & pred_bot <= Bottom ~ pred_bot - pred_top,
                           pred_top >= Top & pred_bot >= Bottom ~ Bottom - pred_top,
@@ -35,25 +26,25 @@ hs_knn_pred <- function(soil.fun, spc_sf, pred_depth, depth_th, n, p, output = l
     dplyr::group_by(ID) %>% dplyr::summarise(obs_mean = weighted.mean(eval(parse(text = target.name)), w = dh, na.rm = TRUE)) %>%
     dplyr::ungroup() %>% dplyr::mutate(gower_distance = gdist)
   if(output == "prediction"){
-    results <- spc_sf %>% dplyr::summarise(pred_mean = sum(obs_mean/gower_distance^p)/sum(1/gower_distance^p))
+    results <- obs.data %>% dplyr::summarise(pred_mean = sum(obs_mean/gower_distance^p)/sum(1/gower_distance^p))
   }else{
-    results <- spc_sf
+    results <- obs.data
   }
     return(results)
 }
 
 
 
-#' @title FUNCTION_TITLE
-#' @description FUNCTION_DESCRIPTION
-#' @param soil.fun PARAM_DESCRIPTION
-#' @param pred.data PARAM_DESCRIPTION
-#' @param obs.data PARAM_DESCRIPTION
-#' @param depth_th PARAM_DESCRIPTION
-#' @param n PARAM_DESCRIPTION
-#' @param p PARAM_DESCRIPTION, Default: 2
-#' @param min_obs PARAM_DESCRIPTION, Default: 10
-#' @param radius PARAM_DESCRIPTION, Default: NA
+#' @title soil 3D knn
+#' @description Perform soil 3D knn
+#' @param soil.fun formula of soil target/predictors relations
+#' @param pred.data Prediction data
+#' @param obs.data Observation data
+#' @param depth_th depth treshold
+#' @param n Number of observations
+#' @param p Power of distance in idw, Default: 2
+#' @param min_obs Minimum observations at particular prediction depth, Default: 10
+#' @param radius Searching radius. , Default: NA
 #' @param output PARAM_DESCRIPTION, Default: list("prediction", "preparation")
 #' @return OUTPUT_DESCRIPTION
 #' @details DETAILS
