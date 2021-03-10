@@ -9,7 +9,7 @@
 #' @param output Output, Default: list("prediction", "preparation")
 #' @return Prediction or data frame
 #' @rdname hs_knn_pred
-#' @importFrom dplyr mutate filter left_join group_by summarise ungroup
+#' @importFrom dplyr mutate filter left_join group_by summarise ungroup case_when
 hs_knn_pred <- function(soil.fun, obs.data, pred_depth, depth_th, n, p, output = list("prediction", "preparation")){
   output <- output[[1]]
   target.name <- all.vars(soil.fun)[1]
@@ -17,7 +17,7 @@ hs_knn_pred <- function(soil.fun, obs.data, pred_depth, depth_th, n, p, output =
   n_ids <- unique(obs.data$ID)[1:n] %>% data.frame(ID = ., stringsAsFactors = FALSE)
   obs.data <- obs.data %>% dplyr::mutate(pred_top = pmax(pred_depth-depth_th, 0), pred_bot = pred_depth+depth_th) %>% 
     dplyr::filter(Top < pred_bot, Bottom > pred_top) %>% 
-    mutate(dh = case_when(pred_top >= Top & pred_bot <= Bottom ~ pred_bot - pred_top,
+    mutate(dh = dplyr::case_when(pred_top >= Top & pred_bot <= Bottom ~ pred_bot - pred_top,
                           pred_top >= Top & pred_bot >= Bottom ~ Bottom - pred_top,
                           pred_top <= Top & pred_bot >= Bottom ~ Bottom - Top,
                           pred_top <= Top & pred_bot <= Bottom ~ pred_bot - Top)) %>%
@@ -60,7 +60,9 @@ hs_knn_pred <- function(soil.fun, obs.data, pred_depth, depth_th, n, p, output =
 #' @importFrom gower gower_dist gower_topn
 #' @importFrom dplyr distinct filter group_split mutate
 #' @importFrom tibble rowid_to_column
-soil3Dknn <- function(soil.fun, pred.data, obs.data, depth_th, n, p = 2, min_obs = 10, radius = NA, output = list("prediction", "preparation")){
+#' @importFrom future plan
+#' @importFrom furrr future_map2
+soil3Dknn <- function(soil.fun, pred.data, obs.data, depth_th, n, p = 2, min_obs = 10, radius = NA, progress = TRUE, output = list("prediction", "preparation")){
   output <- output[[1]]
   obs_sf <- sf::st_as_sf(obs.data, coords = c("x", "y"), remove = FALSE)
   pred_sf <- sf::st_as_sf(pred.data, coords = c("x", "y"), remove = FALSE)
@@ -75,7 +77,7 @@ soil3Dknn <- function(soil.fun, pred.data, obs.data, depth_th, n, p = 2, min_obs
   
   pred_depth <- as.list(pred.data$depth) %>% purrr::map(.x = ., .f = ~data.frame(depth = .x))
   
-  obs_inds <- nngeo::st_nn(x = pred_sf, y = obs_sf %>% dplyr::distinct(x, y, .keep_all = TRUE), sparse = TRUE, k = length(unique(obs.data$ID)), maxdist = radius)
+  obs_inds <- suppressMessages(nngeo::st_nn(x = pred_sf, y = obs_sf %>% dplyr::distinct(x, y, .keep_all = TRUE), sparse = TRUE, k = length(unique(obs.data$ID)), maxdist = radius))
   
   obs_list <- purrr::map(.x = obs_inds, .f = ~obs.data %>% dplyr::distinct(x, y, .keep_all = TRUE) %>% .[.x, ] %>% .$ID) %>% 
     purrr::map(.x = ., .f = ~dplyr::filter(obs.data[, c("ID", "Top", "Bottom", all.vars(soil.fun))], ID %in% .x))
@@ -95,19 +97,25 @@ soil3Dknn <- function(soil.fun, pred.data, obs.data, depth_th, n, p = 2, min_obs
   obs_list2 <- obs_list2[!ex_obs]
   
   pred_list <- pred.data %>% tibble::rowid_to_column() %>% dplyr::group_split(rowid, .keep = FALSE)
-
+  
+  #future::plan(multisession)
   gdist_list1 <- purrr::map2(.x = pred_list, .y = obs_list2, .f = ~gower::gower_topn(x = .x[, cov.names], y = .y[, cov.names], n = dim(.y)[1]))
   
+  #future::plan(multisession)
   obs_list3 <- purrr::map2(.x = obs_list2, .y = gdist_list1, .f = ~.x[.y$index, ]) %>%
     purrr::map2(.x = ., .y = gdist_list1, .f = ~dplyr::mutate(.x, gw = .y$distance[,1]))
-
+  
+  if(progress)(print("Prediction"))
+  
   if(output == "prediction"){
-    prediction <- purrr::map2(.x = obs_list3, .y = pred_list, .f = ~hs_knn_pred(soil.fun = soil.fun, spc_sf = .x, pred_depth = .y$depth, depth_th = depth_th, n = n, p = p, output = output)) %>%
+    #future::plan(multisession)
+    prediction <- purrr::map2(.x = obs_list3, .y = pred_list, .f = ~hs_knn_pred(soil.fun = soil.fun, obs.data = .x, pred_depth = .y$depth, depth_th = depth_th, n = n, p = p, output = output)) %>%
       bind_rows()
     output <- rep(NA, length(pred_depth))
     output[!ex_obs] <- prediction$pred_mean
   }else{
-    preparation <- purrr::map2(.x = obs_list3, .y = pred_list, .f = ~hs_knn_prep(soil.fun = soil.fun, spc_sf = .x, pred_depth = .y$depth, depth_th = depth_th, n = n, output = output))
+    #future::plan(multisession)
+    prediction <- purrr::map2(.x = obs_list3, .y = pred_list, .f = ~hs_knn_pred(soil.fun = soil.fun, obs.data = .x, pred_depth = .y$depth, depth_th = depth_th, n = n, output = output))
     output <- as.list(rep(NA, length(pred_depth)))
     output[!ex_obs] <- preparation
   }
