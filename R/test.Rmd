@@ -26,7 +26,7 @@ library(foreach)
 library(doParallel)
 library(here)
 
-source(here::here("R", "soil3D_knn_function.r"))
+#source(here::here("R", "soil3D_knn_function.r"))
 
 
 ```
