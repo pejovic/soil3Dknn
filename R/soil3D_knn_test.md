@@ -127,7 +127,7 @@ Data preparation involves loading data, preparing data as soil profile collectio
 
 Before, applying nested cross-validation, data were splited into 5 folds (outer and inner). Figure bellow shows five outer folds, while the colors represents the inner partitioning within each fold. 
 
-![](test_files/figure-html/unnamed-chunk-5-1.png)<!-- -->
+![](soil3D_knn_test_files/figure-html/unnamed-chunk-5-1.png)<!-- -->
 
 
 
@@ -223,7 +223,7 @@ edgeroi_df[285, ]
 
 #### xy.model:
 
-![](test_files/figure-html/unnamed-chunk-13-1.png)<!-- -->
+![](soil3D_knn_test_files/figure-html/unnamed-chunk-13-1.png)<!-- -->
 
 and corresponding values (weighted mean of observations from nearest profiles) with gower distances are:
 
@@ -243,7 +243,7 @@ and corresponding values (weighted mean of observations from nearest profiles) w
 
 
 #### full.model:
-![](test_files/figure-html/unnamed-chunk-15-1.png)<!-- -->
+![](soil3D_knn_test_files/figure-html/unnamed-chunk-15-1.png)<!-- -->
 
 and corresponding values (weighted mean of observations from nearest profiles) with gower distances are:
 
@@ -263,7 +263,7 @@ and corresponding values (weighted mean of observations from nearest profiles) w
 #### rand.model:
 
 
-![](test_files/figure-html/unnamed-chunk-17-1.png)<!-- -->
+![](soil3D_knn_test_files/figure-html/unnamed-chunk-17-1.png)<!-- -->
 
 and corresponding values (weighted mean of observations from nearest profiles) with gower distances are:
 
