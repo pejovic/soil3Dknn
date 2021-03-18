@@ -1,7 +1,7 @@
 ---
 title: "Prediction of soil properties in 3D by using soil3D_knn approach"
 author: "Milutin Pejović"
-date: "18 March 2021"
+date: "`r format(Sys.time(), '%d %B %Y')`"
 output:
   html_document:
       keep_md: true
@@ -14,7 +14,22 @@ output:
 
 ---
 
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(aqp)
+library(magrittr)
+library(DT)
+library(sp)
+library(sf)
+library(soil3Dknn)
+library(foreach)
+library(doParallel)
+library(here)
 
+#source(here::here("R", "soil3D_knn_function.r"))
+
+
+```
 
 
 <style>
@@ -47,7 +62,13 @@ Gower's distance can be used to measure how different two records are. The recor
 
 The presented approach was implemented in the R package `soil3D_knn`. The package `soil3D_knn` relies on functionalities of several other packages, including: [gower](https://cran.r-project.org/web/packages/gower/index.html) for calculating gower distance and the [tidyverse](https://www.tidyverse.org/) collection of R packages for data manipulation. 
 
-The package `soil3D_knn` can be download and install from [github](https://github.com/pejovic/soil3Dknn).
+The package `soil3D_knn` can be download and install from [github](https://github.com/pejovic/soil3Dknn). For installation, just type:
+
+```{r eval = FALSE}
+library(devtools)
+devtools::install_github("pejovic/soil3Dknn@main")
+```
+
 
 The package `soil3D_knn` consists of four functions:
 
@@ -112,15 +133,83 @@ The Edgeroi case study has been previously described in McGarry et al. (1989); M
 ## Data preparation
 Data preparation involves loading data, preparing data as soil profile collection, overlaying with spatial covariates grids, and preparing tidy data frame of soil data with the following structure: Each row represent one observation with the following structure: Profile ID, top, bottom, target variable observation, surface covariates, spatial coordinates (x, y). Such `data.frame`also represents the input for the created functions. 
 
+```{r include = FALSE, cache=TRUE}
+# Edgeroi data
+load(here::here("Data", "edgeroi_data.rda"))
+load(here::here("Data", "edgeroi_maps.rda"))
 
 
+edgeroi_data$horizons %<>% dplyr::rename("Top" = "UHDICM", "Bottom" = "LHDICM", "ID" = "SOURCEID") %>%
+  dplyr::mutate(OC = (ORCDRC)/10)
+
+edgeroi_data$sites <-  edgeroi_data$sites %>% dplyr::rename("ID" = "SOURCEID")
+sites <- edgeroi_data$sites
+coordinates(sites) <- ~ LONGDA94 + LATGDA94
+proj4string(sites) <- CRS("+proj=longlat +ellps=GRS80 +datum=WGS84 +no_defs")
+sites <- spTransform(sites, proj4string(edgeroi_maps))
+edgeroi_data$sites <- data.frame(sites)
+edgeroi_data$sites <- edgeroi_data$sites %>% dplyr::rename(c("x"="LONGDA94", "y"="LATGDA94"))
+
+edgeroi_sf <- dplyr::inner_join(edgeroi_data$horizons, edgeroi_data$sites) %>% dplyr::select(ID, ORCDRC, OC, PHIHO5, Top, Bottom, x, y)
+
+edgeroi_sf <- edgeroi_sf %>% sf::st_as_sf(., coords = c("x", "y"), remove = FALSE) %>% 
+  dplyr::group_by(ID) %>% 
+  dplyr::mutate(hz_ID = 1:n()) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::filter(!is.na(OC)) %>% 
+  dplyr::arrange(ID) %>% 
+  dplyr::mutate(ID = as.character(ID), x = as.double(x), y = as.double(y), depth = (Top + Bottom)/2) %>%
+  dplyr::select(ID, hz_ID, Top, Bottom, ORCDRC, OC, PHIHO5, x, y, depth, geometry) %>%
+  dplyr::filter(!is.na(OC)) %>%
+  sf::st_set_crs(proj4string(edgeroi_maps))
+
+edgeroi_sf <- edgeroi_sf %>% dplyr::mutate(x = sf::st_coordinates(.)[,1], y = sf::st_coordinates(.)[,2]) %>% sf::st_drop_geometry() %>% dplyr::select(ID, Top, Bottom, ORCDRC, OC, PHIHO5, x, y, depth)
+
+edgeroi_sp <- edgeroi_sf %>% dplyr::select(-Top, -Bottom) %>% dplyr::distinct(x, y, .keep_all = TRUE) 
+coordinates(edgeroi_sp) <- ~x + y 
+proj4string(edgeroi_sp) <- proj4string(edgeroi_maps)
+edgeroi_ov <- sp::over(edgeroi_sp, edgeroi_maps) %>% dplyr::mutate(ID = edgeroi_sp$ID) %>% dplyr::select(ID, everything())
+
+edgeroi_df <- dplyr::inner_join(edgeroi_sf, edgeroi_ov) %>% dplyr::select(ID, Top, Bottom, OC, MVBSRT6:EV3MOD5, x, y, depth)
+```
 
 
+```{r echo = FALSE, include = FALSE}
+"%ni%" <- Negate("%in%")
+
+edgeroi_folds <- stratpart(target.name = c("OC", "x", "y"), sp.data = edgeroi_sp, num.folds = 5, princ.comp = TRUE, kmean.vars = NA, num.means = 3, spatial.cluster = TRUE, nested = TRUE, seed = 45, cum.prop = 0.9)
+
+edgeroi_params <- expand.grid(depth_th = seq(3, 15, 3), n.obs = seq(4, 8, 1), p = c(1:2))
+
+datatable(edgeroi_df, fillContainer = T, caption = "The format of the input data.frame for Edgeroi case study") %>% formatRound(columns=c('Top', 'Bottom', 'OC', 'x', 'y', 'depth'), digits=1)
+```
 
 
 Before, applying nested cross-validation, data were splited into 5 folds (outer and inner). Figure bellow shows five outer folds, while the colors represents the inner partitioning within each fold. 
 
-![](test_files/figure-html/unnamed-chunk-4-1.png)<!-- -->
+```{r echo = FALSE}
+plot_folds <- function(sp.data, target.name, folds){
+  data <- as.data.frame(sp.data)
+  data$ID <- c(1:dim(data)[1])
+  data <- data %>% dplyr::rename(x = names(.)[which(names(data) %in% colnames(coordinates(sp.data)))[1]], y = names(.)[which(names(data) %in% colnames(coordinates(sp.data)))[2]], target = names(.)[which(names(data) == target.name)[1]] )
+  data <- cbind(data, folds)
+  data$inner.fold <- factor(data$inner.fold)
+  q <- ggplot(data, aes(x = x, y = y, fill = inner.fold))
+  r <- q + geom_point(aes(size = sqrt(target/pi)), pch = 21, show.legend = FALSE) + scale_size_continuous(range=c(1,7))
+  r <- r + facet_wrap(~ outer.fold) + theme_bw()
+  return(r)
+}
+
+
+edgeroi_sp <- edgeroi_df %>% dplyr::group_by(ID) %>% 
+  dplyr::summarise(OC = mean(OC), x = mean(x), y = mean(y), max.depth = max(depth), n.obs = n()) %>%
+  dplyr::ungroup()
+coordinates(edgeroi_sp) <- ~x + y
+
+edgeroi_folds_plot <- plot_folds(sp.data = edgeroi_sp, target.name = "OC", folds = edgeroi_folds)
+
+edgeroi_folds_plot
+```
 
 
 
@@ -130,7 +219,12 @@ Before, applying nested cross-validation, data were splited into 5 folds (outer 
 Considering that the `soil.fun` parameter determines which approach will be applied (standard or homosoil), three formulas were selected. `xy.model` includes only spatial coordinates in searching for nearest profiles. `full.model` includes all the predictors, while the `part.model` includes only few commonly used predictors (DEM, TWI and parent material) in addition to spatial coordinates.
 
 
+```{r include = FALSE}
+xy.edgeroi <- as.formula(paste("OC ~", paste(c("x", "y", "depth"), collapse="+")))
+full.edgeroi <- as.formula(paste("OC ~", paste(names(edgeroi_df[-c(1:4)]), collapse="+")))
+rand.edgeroi <- as.formula(paste("OC ~", paste(c("x", "y", "DEMSRT5", "TWISRT5", "PMTGEO5", "depth"), collapse="+")))
 
+```
 
 ### Edgeroi
 
@@ -156,10 +250,18 @@ $$
 ####
 
 
+```{r eval = FALSE, include = FALSE}
+registerDoParallel(cores=6)
+edgeroi_results <- foreach(f = c(xy.fun, full.fun, part.fun)) %dopar% ncv_soil3D_knn(soil.fun = f, obs.data = edgeroi_df, folds = edgeroi_folds, params = edgeroi_params)
+```
 
 
+```{r eval = FALSE, include = FALSE}
+xy.bor <- as.formula(paste("OC ~", paste(c("x", "y", "depth"), collapse="+")))
+full.bor <- as.formula(paste("OC ~", paste(names(bor_df[-c(1:4)]), collapse="+")))
+rand.bor <- as.formula(paste("OC ~", paste(c("x", "y", "DEM", "TWI", "Slope", "depth"), collapse="+")))
 
-
+```
 
 ### Bor
 
@@ -183,94 +285,94 @@ $$
 $$
 
 
+```{r include = FALSE, eval = FALSE}
+registerDoParallel(cores=6)
+bor_results <- foreach(f = c(xy.model, full.model, part.model)) %dopar% ncv_soil3D_knn(soil.fun = f, obs.data = bor_df, folds = bor_folds, params = bor_params)
+```
 
 
 
-
-
+```{r include = FALSE}
+load(here::here("Data", "edgeroi_results.rda"))
+load(here::here("Data", "bor_results.rda"))
+```
 
 ### Searching for nearest profiles - a visualization
 
 Figures and table bellow show the differences in the results of searching for the nearest profiles. How taking other predictors into searching account influence the searching result. For that purpose, the prediction at the 285. observation from Edgeroi data (blue triangle) was used. It has the depth of 5cm.
 
-
-```r
+```{r}
 edgeroi_df[285, ]
 ```
 
+
+
+```{r include = FALSE}
+#soil.fun = xy.edgeroi; obs.data = edgeroi_df; n.pred = 285; n.obs = 6; output = "plot"
+
+plot_obs <- function(soil.fun, obs.data, n.pred, n.obs, output = list("plot", "table")){
+  output <- output[1]
+  id <- obs.data[n.pred, ]$ID
+  n.obs.data <- dplyr::filter(obs.data, ID != id)
+  n.pred.data <-  obs.data[n.pred, ]
+  search.obs <- soil3D_knn(soil.fun = soil.fun, obs.data = n.obs.data, pred.data = n.pred.data, n.obs = n.obs, depth_th = 10, output = "preparation")
+  search.obs <- suppressMessages(dplyr::left_join(search.obs, n.obs.data)) %>% dplyr::group_by(ID) %>% 
+    dplyr::summarise(obs_mean = mean(obs_mean),gower_dist = mean(gower_distance), x = mean(x), y = mean(y)) %>%
+    dplyr::ungroup()
+  if(output == "plot"){
+    out <- ggplot(data = n.obs.data %>% dplyr::group_by(ID) %>% dplyr::summarise(OC.mean = mean(OC), x = mean(x), y = mean(y))) + 
+      geom_point(aes(x = x, y = y), shape = 1, color = "black", show.legend = FALSE) + 
+      geom_point(data = n.pred.data, aes(x = x, y = y, size = depth), shape = 17, color = "blue", show.legend = FALSE) + 
+      geom_point(data = search.obs, aes(x = x, y = y, size = obs_mean), color = "red", show.legend = FALSE) +
+      theme_bw()
+  }else{
+    out <- search.obs
+  }
+  return(out)
+  
+}
+
 ```
-## # A tibble: 1 x 20
-##   ID      Top Bottom    OC MVBSRT6 TI1LAN6 TI2LAN6 PCKGAD6 RUTGAD6 PCTGAD6
-##   <chr> <dbl>  <dbl> <dbl>   <dbl>   <dbl>   <dbl>   <dbl>   <dbl>   <dbl>
-## 1 399_~     0   10.0 0.920    4.59    18.2   -29.1   0.928   0.172    5.36
-## # ... with 10 more variables: LNUABS6 <fct>, DEMSRT5 <dbl>, TWISRT5 <dbl>,
-## #   PMTGEO5 <fct>, EV1MOD5 <dbl>, EV2MOD5 <dbl>, EV3MOD5 <dbl>, x <dbl>,
-## #   y <dbl>, depth <dbl>
-```
-
-
-
-
 
 
 
 #### xy.model:
 
-![](test_files/figure-html/unnamed-chunk-12-1.png)<!-- -->
+```{r echo = FALSE}
+plot_obs(soil.fun = xy.edgeroi, obs.data = edgeroi_df, n.pred = 285, n.obs = 6, output = "plot")
+```
 
 and corresponding values (weighted mean of observations from nearest profiles) with gower distances are:
 
-
-```
-## # A tibble: 6 x 5
-##   ID                  obs_mean gower_dist       x        y
-## * <chr>                  <dbl>      <dbl>   <dbl>    <dbl>
-## 1 399_EDGEROI_ed027_1    1.46      0.0512 765413. 6675184.
-## 2 399_EDGEROI_ed028_1    1.09      0.0507 768113. 6675084.
-## 3 399_EDGEROI_ed044_1    1.72      0.0295 763913. 6672784.
-## 4 399_EDGEROI_ed046_1    0.785     0.0300 769413. 6672684.
-## 5 399_EDGEROI_ed062_1    1.54      0.0533 765213. 6670384.
-## 6 399_EDGEROI_ed063_1    1.61      0.0527 768013. 6670284.
+```{r echo = FALSE}
+plot_obs(soil.fun = xy.edgeroi, obs.data = edgeroi_df, n.pred = 285, n.obs = 6, out = "table")
 ```
 
 
 
 #### full.model:
-![](test_files/figure-html/unnamed-chunk-14-1.png)<!-- -->
+```{r echo = FALSE}
+
+plot_obs(soil.fun = full.edgeroi, obs.data = edgeroi_df, n.pred = 285, n.obs = 6)
+```
 
 and corresponding values (weighted mean of observations from nearest profiles) with gower distances are:
 
-
-```
-## # A tibble: 6 x 5
-##   ID                  obs_mean gower_dist       x        y
-## * <chr>                  <dbl>      <dbl>   <dbl>    <dbl>
-## 1 399_EDGEROI_ed011_1    1.28      0.0490 769613. 6677384.
-## 2 399_EDGEROI_ed029_1    0.710     0.0648 770913. 6674984.
-## 3 399_EDGEROI_ed043_1    0.885     0.0491 761113. 6672884.
-## 4 399_EDGEROI_ed044_1    1.72      0.0607 763913. 6672784.
-## 5 399_EDGEROI_ed046_1    0.785     0.0482 769413. 6672684.
-## 6 399_EDGEROI_ed097_1    1.15      0.0556 765013. 6665184.
+```{r echo = FALSE}
+plot_obs(soil.fun = full.edgeroi, obs.data = edgeroi_df, n.pred = 285, n.obs = 6, out = "table")
 ```
 
 #### rand.model:
 
 
-![](test_files/figure-html/unnamed-chunk-16-1.png)<!-- -->
+```{r echo = FALSE}
+plot_obs(soil.fun = rand.edgeroi, obs.data = edgeroi_df, n.pred = 285, n.obs = 6)
+```
 
 and corresponding values (weighted mean of observations from nearest profiles) with gower distances are:
 
-
-```
-## # A tibble: 6 x 5
-##   ID                  obs_mean gower_dist       x        y
-## * <chr>                  <dbl>      <dbl>   <dbl>    <dbl>
-## 1 399_EDGEROI_ed010_1    1.87      0.0338 766813. 6677484.
-## 2 399_EDGEROI_ed027_1    1.46      0.0305 765413. 6675184.
-## 3 399_EDGEROI_ed028_1    1.09      0.0276 768113. 6675084.
-## 4 399_EDGEROI_ed044_1    1.72      0.0272 763913. 6672784.
-## 5 399_EDGEROI_ed046_1    0.785     0.0195 769413. 6672684.
-## 6 399_EDGEROI_ed062_1    1.54      0.0287 765213. 6670384.
+```{r echo = FALSE}
+plot_obs(soil.fun = rand.edgeroi, obs.data = edgeroi_df, n.pred = 285, n.obs = 6, out = "table")
 ```
 
 
@@ -279,11 +381,38 @@ and corresponding values (weighted mean of observations from nearest profiles) w
 
 Table bellow shows the R squared obtained from nested cross-validation.
 
-<!--html_preserve--><div id="htmlwidget-dee765ee68118ad5ce36" style="width:100%;height:auto;" class="datatables html-widget"></div>
-<script type="application/json" data-for="htmlwidget-dee765ee68118ad5ce36">{"x":{"filter":"none","caption":"<caption>R squared obtained from nested cross-validation procedure<\/caption>","fillContainer":true,"data":[["1","2","3"],["xy.model","full.model","rand.model"],[0.53764776579421,0.578301387540204,0.564198339512164],[0.454031650560432,0.469704261567938,0.536044267367011]],"container":"<table class=\"display fill-container\">\n  <thead>\n    <tr>\n      <th> <\/th>\n      <th>model<\/th>\n      <th>Edgeroi<\/th>\n      <th>Bor<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"columnDefs":[{"targets":3,"render":"function(data, type, row, meta) {\n    return type !== 'display' ? data : DTWidget.formatRound(data, 2, 3, \",\", \".\");\n  }"},{"targets":2,"render":"function(data, type, row, meta) {\n    return type !== 'display' ? data : DTWidget.formatRound(data, 2, 3, \",\", \".\");\n  }"},{"className":"dt-right","targets":[2,3]},{"orderable":false,"targets":0}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":["options.columnDefs.0.render","options.columnDefs.1.render"],"jsHooks":[]}</script><!--/html_preserve-->
+```{r echo = FALSE}
+rsqs <- data.frame(model = c("xy.model", "full.model", "rand.model"), 
+           Edgeroi = c(edgeroi_results[[1]]$rsq, edgeroi_results[[2]]$rsq, edgeroi_results[[3]]$rsq),
+           Bor = c(bor_results[[1]]$rsq, bor_results[[2]]$rsq, bor_results[[3]]$rsq)
+           )
 
 
 
+datatable(rsqs, fillContainer = T, caption = "R squared obtained from nested cross-validation procedure") %>% formatRound(columns=c('Bor', 'Edgeroi'), digits=2)
+
+
+```
+
+
+```{r include = FALSE, eval = FALSE}
+
+edg.xy.results <- suppressMessages(edgeroi_results[[1]]$obs.pred %>% dplyr::bind_rows() %>% 
+  dplyr::mutate(error = prediction - OC, depth = (Top + Bottom)/2) %>%
+  dplyr::inner_join(., edgeroi_df %>% dplyr::select(ID, Top, Bottom, x, y)))
+
+edg.full.results <- suppressMessages(edgeroi_results[[2]]$obs.pred %>% dplyr::bind_rows() %>% 
+  dplyr::mutate(error = prediction - OC, depth = (Top + Bottom)/2) %>%
+  dplyr::inner_join(., edgeroi_df %>% dplyr::select(ID, Top, Bottom, x, y)))
+
+edg.rand.results <- suppressMessages(edgeroi_results[[3]]$obs.pred %>% dplyr::bind_rows() %>% 
+  dplyr::mutate(error = prediction - OC, depth = (Top + Bottom)/2) %>%
+  dplyr::inner_join(., edgeroi_df %>% dplyr::select(ID, Top, Bottom, x, y)))
+
+ggplot(data = edg.rand.results) + 
+  geom_point(aes(x = OC, y = prediction, size = error), alpha = 0.5) + 
+  theme_bw()
+```
 
 
 # Conclusion

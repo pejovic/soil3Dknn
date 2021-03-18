@@ -4174,7 +4174,9 @@ text-align: justify}
 <div id="the-implementaion" class="section level2">
 <h2>The implementaion</h2>
 <p>The presented approach was implemented in the R package <code>soil3D_knn</code>. The package <code>soil3D_knn</code> relies on functionalities of several other packages, including: <a href="https://cran.r-project.org/web/packages/gower/index.html">gower</a> for calculating gower distance and the <a href="https://www.tidyverse.org/">tidyverse</a> collection of R packages for data manipulation.</p>
-<p>The package <code>soil3D_knn</code> can be download and install from <a href="https://github.com/pejovic/soil3Dknn">github</a>.</p>
+<p>The package <code>soil3D_knn</code> can be download and install from <a href="https://github.com/pejovic/soil3Dknn">github</a>. For installation, just type:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb1-1" title="1"><span class="kw">library</span>(devtools)</a>
+<a class="sourceLine" id="cb1-2" title="2">devtools<span class="op">::</span><span class="kw">install_github</span>(<span class="st">&quot;pejovic/soil3Dknn@main&quot;</span>)</a></code></pre></div>
 <p>The package <code>soil3D_knn</code> consists of four functions:</p>
 <p>Function <code>soil3D_knn</code> do the prediction at the the particular location in 3D soil space. Parameters of the functions are:</p>
 <ol style="list-style-type: decimal">
@@ -4273,7 +4275,7 @@ text-align: justify}
 <div id="searching-for-nearest-profiles---a-visualization" class="section level3">
 <h3>Searching for nearest profiles - a visualization</h3>
 <p>Figures and table bellow show the differences in the results of searching for the nearest profiles. How taking other predictors into searching account influence the searching result. For that purpose, the prediction at the 285. observation from Edgeroi data (blue triangle) was used. It has the depth of 5cm.</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb1-1" title="1">edgeroi_df[<span class="dv">285</span>, ]</a></code></pre></div>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb2-1" title="1">edgeroi_df[<span class="dv">285</span>, ]</a></code></pre></div>
 <pre><code>## # A tibble: 1 x 20
 ##   ID      Top Bottom    OC MVBSRT6 TI1LAN6 TI2LAN6 PCKGAD6 RUTGAD6 PCTGAD6
 ##   &lt;chr&gt; &lt;dbl&gt;  &lt;dbl&gt; &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;
