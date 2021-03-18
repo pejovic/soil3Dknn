@@ -3,3 +3,8 @@
 ^C:/R_projects/soil3Dknn/literature$
 ^.*\.Rproj$
 ^\.Rproj\.user$
+^C:/R_projects/soil3Dknn/R/test_cache$
+^C:/R_projects/soil3Dknn/R/test_file$
+^C:/R_projects/soil3Dknn/R/test\.rmd$
+^C:/R_projects/soil3Dknn/R/test\.html$
+^C:/R_projects/soil3Dknn/R/test\.md$
