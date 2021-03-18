@@ -66,11 +66,11 @@ Function `soil3D_knn` do the prediction at the the particular location in 3D soi
 
 3. `pred.data` - Prediction data. This is `data.frame` with the following columns: `ID`, `Covariates` columns, `x`, `y`, `depth`.
 
-4. `n.obs` = number of neighboring profiles.Tuning parameter.
+4. `n.obs` = number of neighboring profiles.**Tuning parameter**.
 
-5. `depth_th` - depth treshold. Serves to define prediction depth interval: `pdi = pred.data$depth +/- depth_th`, Tuning parameter.
+5. `depth_th` - depth treshold. Serves to define prediction depth interval: `pdi = pred.data$depth +/- depth_th`, **Tuning parameter**.
 
-6. `p` - power of distance. Tuning parameter.
+6. `p` - power of distance. **Tuning parameter**.
 
 
 Function `tune_soil3D_knn` performs the cross-validation based tuning of meta-parameters. Parameters of the functions are:
@@ -105,10 +105,11 @@ Function `stratpart` perform stratified partitioning of the data (profiles). Par
 4. ...
 
 
+***As it can be seen, three parameters can be tuned: n.obs, depth_th and p.***
 
 # Experiment
 
-The experiment has involved the applying the `standard soil3D knn` and `homosoil3D knn` on mapping Organic Carbon with data from two case studies, Bor and Edgeroi.
+The experiment has involved the applying the `standard soil3D_knn` and `homosoil soil3D_knn` on mapping Organic Carbon with data from two case studies, Bor and Edgeroi. 
 
 ## Case studies
 
@@ -129,12 +130,12 @@ Before, applying nested cross-validation, data were splited into 5 folds (outer 
 
 ![](soil3D_knn_test_files/figure-html/unnamed-chunk-5-1.png)<!-- -->
 
-
+***According to Nested Cross-validation, inner folds were used for parameter tuning, while the outer folds were used for testing/prediction. *** 
 
 
 ## Models
 
-Considering that the `soil.fun` parameter determines which approach will be applied (standard or homosoil), three formulas were selected. `xy.model` includes only spatial coordinates in searching for nearest profiles. `full.model` includes all the predictors, while the `part.model` includes only few commonly used predictors (DEM, TWI and parent material) in addition to spatial coordinates.
+Considering that the `soil.fun` parameter determines which approach will be applied (standard or homosoil), three formulas were selected. `xy.model` includes only spatial coordinates in searching for nearest profiles. `full.model` includes all the predictors, while the `part.model` includes randomly selected, few commonly used predictors (DEM, TWI and parent material) in addition to spatial coordinates.
 
 
 
@@ -295,7 +296,10 @@ Table bellow shows the R squared obtained from nested cross-validation.
 
 # Conclusion
 
-The obtained results show that 'homosoil' variants (full.model and rand.model) improve the prediction accuracy in comparison to standard knn. In case of Edgeroi data, the improvement is of 4% in R squared, for full.model. In case of Bor, it can be noticed that the `rand.model` performs the best, with the improvement of 9% in R squared. It indicates that the improvement highly depends on the choice of the predictors that are taken into distance calculation.
+The obtained results show that 'homosoil' variants (full.model and rand.model) improve the prediction accuracy in comparison to standard knn. In case of Edgeroi data, the improvement is of 4% in R squared, for full.model. In case of Bor, it can be noticed that the `rand.model` performs the best, with the improvement of 9% in R squared. It indicates that the improvement highly depends on the choice of the predictors that are taken into distance calculation. 
 
+In addition, the results for Edgeroi are even better than ones I found in the paper "Predicting soil properties in 3D: Should depth be a covariate?" by [Ma et.al.(2021)](https://www.sciencedirect.com/science/article/abs/pii/S0016706120325490) (see figure bellow). I know that these results cannot be just simply compared, but I in my opinion, it gives some insight to what can be achieved with soil3Dknn approach.
+
+<img src="C:/R_projects/soil3Dknn/!Other/Ma_etal_2021.jpg" width="100%" style="display: block; margin: auto;" />
 
 
