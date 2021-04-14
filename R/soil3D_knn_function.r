@@ -135,10 +135,10 @@ soil3Dknn <- function(soil.fun, obs.data, pred.data, n.obs, depth.th, p, d, outp
 #' @importFrom dplyr mutate distinct filter group_split
 #' @importFrom tibble rowid_to_column
 #' @importFrom purrr map
-#' @importFrom yardstick rsq
+#' @importFrom yardstick rsq rmse
 tune.soil3Dknn <- function(soil.fun, obs.data, params, folds, parallel = FALSE, n.cores = 1){
   "%ni%" <- Negate("%in%")
-  params <- params %>% dplyr::mutate(rsq = as.numeric(NA))
+  params <- params %>% dplyr::mutate(rsq = as.numeric(NA), rmse = as.numeric(NA))
   for(k in 1:dim(params)[1]){
     prediction <- data.frame()
     for(i in 1:length(unique(folds))){ 
@@ -149,6 +149,7 @@ tune.soil3Dknn <- function(soil.fun, obs.data, params, folds, parallel = FALSE, 
       prediction <- rbind(prediction, pred_df[, c("ID", "Top", "Bottom", all.vars(soil.fun)[1], "prediction")])
     }
     params[k, "rsq"] <- yardstick::rsq(prediction, truth = eval(parse(text = all.vars(soil.fun)[1])), estimate = prediction)[3]$.estimate
+    params[k, "rmse"] <- yardstick::rmse(prediction, truth = eval(parse(text = all.vars(soil.fun)[1])), estimate = prediction)[3]$.estimate
   }
   return(params)
 }
@@ -164,6 +165,7 @@ tune.soil3Dknn <- function(soil.fun, obs.data, params, folds, parallel = FALSE, 
 #' @param folds data.frame with two columns indicating which profiles belong to each fold in outer and inner loop of the nested cross-validation.
 #' @param parallel logical, if TRUE the computation will perform in parallel, Default: FALSE
 #' @param n.cores Number of cores for parallel computation, Default: 1
+#' @param measure Accuracy measure for model selection, Default: "rsq"
 #' @return Accuracy measures
 #' @details DETAILS
 #' @examples 
@@ -178,8 +180,9 @@ tune.soil3Dknn <- function(soil.fun, obs.data, params, folds, parallel = FALSE, 
 #' @importFrom magrittr %>% %<>%
 #' @importFrom tibble rowid_to_column
 #' @importFrom purrr map
-#' @importFrom yardstick rsq
-ncv.soil3Dknn <- function(soil.fun, obs.data, params, folds, parallel = FALSE, n.cores = 1){
+#' @importFrom yardstick rsq rmse
+ncv.soil3Dknn <- function(soil.fun, obs.data, params, folds, parallel = FALSE, n.cores = 1, measure = c("rsq", "rmse")){
+  measure <- measure[1]
   "%ni%" <- Negate("%in%")
   outer.results <- as.list(rep(NA, length(unique(folds$outer.fold))))
   best.params <- as.list(rep(NA, length(unique(folds$outer.fold))))
@@ -189,14 +192,14 @@ ncv.soil3Dknn <- function(soil.fun, obs.data, params, folds, parallel = FALSE, n
     pred_df <- obs.data %>% dplyr::filter(ID %ni% train_ID$ID)
     inner.folds <- folds[folds$outer.fold != i, ] %>% .$inner.fold
     tune.results <- soil3Dknn::tune.soil3Dknn(soil.fun = soil.fun, obs.data = train_df, folds = inner.folds, params = params, parallel = parallel, n.cores = n.cores)
-    best.tune <- tune.results[which.max(tune.results$rsq), 1:3]
+    best.tune <- if(measure == "rsq"){tune.results[which.max(tune.results$rsq), 1:4]}else{tune.results[which.min(tune.results$rmse), 1:4]}
     pred_df <- soil3Dknn::soil3Dknn(soil.fun = soil.fun, obs.data = train_df, pred.data = pred_df, depth.th = best.tune$depth.th, n.obs = best.tune$n.obs, p = best.tune$p, d = best.tune$d, output = "prediction", parallel = parallel, n.cores = n.cores)
     outer.results[[i]] <- pred_df[, c("ID", "Top", "Bottom", all.vars(soil.fun)[1], "prediction")]
     best.params[[i]] <- best.tune
   }
   outer.rsq <- yardstick::rsq(outer.results %>% dplyr::bind_rows(), truth = eval(parse(text = all.vars(soil.fun)[1])), estimate = prediction)[3]$.estimate
-  outer.rmse <- yardstick::rsq(outer.results %>% dplyr::bind_rows(), truth = eval(parse(text = all.vars(soil.fun)[1])), estimate = prediction)[3]$.estimate
-  results <- list(obs.pred = outer.results, best.params = best.params,  rsq = outer.rsq, rmse = outer.rmse, )
+  outer.rmse <- yardstick::rmse(outer.results %>% dplyr::bind_rows(), truth = eval(parse(text = all.vars(soil.fun)[1])), estimate = prediction)[3]$.estimate
+  results <- list(obs.pred = outer.results, best.params = best.params,  rsq = outer.rsq, rmse = outer.rmse )
   return(results)
 }
 
