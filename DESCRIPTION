@@ -23,4 +23,6 @@ Imports:
     purrr,
     yardstick,
     foreach,
-    doParallel
+    doParallel,
+    rpart,
+    randomForest

@@ -9,6 +9,7 @@ tune.soil3Dknn(
   obs.data,
   params,
   folds,
+  weights = FALSE,
   parallel = FALSE,
   n.cores = 1
 )
@@ -18,9 +19,11 @@ tune.soil3Dknn(
 
 \item{obs.data}{Observation data. Tidy \code{data.frame} with the following columns: \code{ID}, \code{Top}, \code{Bottom}, \verb{Target variable} column, \code{Covariates} columns, \code{x}, \code{y}, \code{depth}.}
 
-\item{params}{\code{data.frame} of possible values of tuning parameters (\code{n.obs}, \code{p}, \code{d}).}
+\item{params}{\code{data.frame} of possible values of tuning parameters (\code{depth.th}, \code{n.obs}, \code{p}, \code{d}).}
 
 \item{folds}{vector indicating which profiles belong to each fold.}
+
+\item{weights}{logical, if TRUE weights for gower distance components will be computed}
 
 \item{parallel}{logical, if TRUE the computation will perform in parallel, Default: FALSE}
 

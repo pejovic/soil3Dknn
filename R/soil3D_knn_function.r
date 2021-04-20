@@ -10,6 +10,7 @@
 #' @param n.obs number of neighboring profiles.Tuning parameter.
 #' @param depth.th depth threshold. Serves to define prediction depth interval: `pdi = pred.data$depth +/- depth.th`, Tuning parameter.
 #' @param p power of distance. Tuning parameter. Default: 1
+#' @param weights A vector of weights of length nvars that defines the weight applied to each component of the gower distance
 #' @param output prediction or preparation. If output = "prediction" prediction will be applied, Default: 'prediction'
 #' @return prediction based on IDW and gower distance.
 #' @details DETAILS
@@ -28,7 +29,7 @@
 #' 
 # soil.fun = xy.edgeroi; obs.data = edgeroi_df[edgeroi_df$ID != "399_EDGEROI_ed003_1", ]; pred.data = edgeroi_df[(edgeroi_df$ID == "399_EDGEROI_ed003_1"), ][6, ]; depth.th = 15; p = 1; folds = edgeroi_folds; params = edgeroi_params; d = 2; n.obs = 5
 
-soil3Dknn.pred <- function(soil.fun, obs.data, pred.data, n.obs, depth.th, p, d, output = "prediction"){
+soil3Dknn.pred <- function(soil.fun, obs.data, pred.data, n.obs, depth.th, p, d, weights, output = "prediction"){
   target.name <- all.vars(soil.fun)[1]
   coord_names <- c("x", "y")
   cov.names <- all.vars(soil.fun)[-1]
@@ -49,7 +50,7 @@ soil3Dknn.pred <- function(soil.fun, obs.data, pred.data, n.obs, depth.th, p, d,
     # }
   }
   if(!is.na(results)){
-    gower_search <- gower::gower_topn(x = pred.data[, cov.names], y = in.obs.data %>% dplyr::distinct(x, y, .keep_all = TRUE) %>% .[, cov.names], n = n.obs)
+    gower_search <- gower::gower_topn(x = pred.data[, cov.names], y = in.obs.data %>% dplyr::distinct(x, y, .keep_all = TRUE) %>% .[, cov.names], n = n.obs, weights = weights)
     
     in.obs.data.ID <- in.obs.data %>% dplyr::distinct(x, y, .keep_all = TRUE) %>% .[as.numeric(gower_search$index), "ID"]
     in.obs.data <- suppressMessages(obs.data %>% dplyr::inner_join(data.frame(ID = in.obs.data.ID, gower_distance = gower_search$distance), .))
@@ -81,6 +82,7 @@ soil3Dknn.pred <- function(soil.fun, obs.data, pred.data, n.obs, depth.th, p, d,
 #' @param depth.th depth threshold. Serves to define prediction depth interval: `pdi = pred.data$depth +/- depth.th`, Tuning parameter, Default: 10
 #' @param p power of horizontal distance. Tuning parameter. Default: 1
 #' @param d power of vertical distance. Tuning parameter. Default: 1
+#' @param weights logical, if TRUE weights for gower distance components will be computed
 #' @param output prediction or preparation. If output = "prediction" prediction will be applied, Default: 'prediction'
 #' @param parallel logical, if TRUE the computation will perform in parallel, Default: FALSE
 #' @param n.cores Number of cores for parallel computation, Default: 1
@@ -94,17 +96,34 @@ soil3Dknn.pred <- function(soil.fun, obs.data, pred.data, n.obs, depth.th, p, d,
 #' }
 #' @rdname soil3Dknn
 #' @export
-#' @importFrom doParallel registerDoParallel %dopar%
-#' @importFrom foreach foreach
-#' @importFrom gower gower_topn 
-soil3Dknn <- function(soil.fun, obs.data, pred.data, n.obs, depth.th, p, d, output = "prediction", parallel = FALSE, n.cores = 1){
+#' @importFrom doParallel registerDoParallel 
+#' @importFrom foreach foreach %dopar%
+#' @importFrom gower gower_topn
+#' @importFrom randomForest randomForest 
+soil3Dknn <- function(soil.fun, obs.data, pred.data, n.obs, depth.th, p, d, weights = FALSE, output = "prediction", parallel = FALSE, n.cores = 1){
+  target.name <- all.vars(soil.fun)[1]
+  coord_names <- c("x", "y")
+  cov.names <- all.vars(soil.fun)[-1]
+  cov.names <- cov.names[-which(cov.names == "depth")]
+  #TODO: cov.names i coord_names su isti za slucaj xy.edgeroi. Proveri da nije imalo nekih posledica.
+  range01 <- function(x){(x-min(x))/(max(x)-min(x))}
+  if(weights){
+    w <- randomForest::randomForest(as.formula(paste(target.name, "~", paste(cov.names, collapse="+"), sep = "")), data = obs.data, importance = TRUE, ntree = 100)$importance[, 2]
+    w <- range01(w)
+    # w <- soil3Dknn::dx2y(d = obs.data[, c(target.name, cov.names)], target = target.name,  confidence = FALSE)
+    # w <- w[w$y == target.name, ]
+    # w <- w[match(cov.names, w$x),]
+    # w <- range01(w$x2y)
+  }else{
+    w <- NULL
+  }
   pred.data$prediction <- 0
   if(parallel){
     doParallel::registerDoParallel(cores = n.cores)
-    pred.data$prediction <- foreach::foreach(i = 1:dim(pred.data)[1], .combine = c, .packages = "soil3Dknn") %dopar% soil3Dknn::soil3Dknn.pred(soil.fun = soil.fun, obs.data = obs.data, pred.data = pred.data[i, ], depth.th = depth.th, n.obs = n.obs, p = p, d = d)# %>% unlist()
+    pred.data$prediction <- foreach::foreach(i = 1:dim(pred.data)[1], .combine = c, .packages = "soil3Dknn") %dopar% soil3Dknn::soil3Dknn.pred(soil.fun = soil.fun, obs.data = obs.data, pred.data = pred.data[i, ], depth.th = depth.th, n.obs = n.obs, p = p, d = d, weights = w)# %>% unlist()
   }else{
     for(i in 1:dim(pred.data)[1]){
-      pred.data$prediction[i] <- soil3Dknn.pred(soil.fun = soil.fun, obs.data = obs.data, pred.data = pred.data[i, ], depth.th = depth.th, n.obs = n.obs, p = p, d = d) %>% unlist()
+      pred.data$prediction[i] <- soil3Dknn.pred(soil.fun = soil.fun, obs.data = obs.data, pred.data = pred.data[i, ], depth.th = depth.th, n.obs = n.obs, p = p, d = d, weights = w) %>% unlist()
     }
   }
  return(pred.data)
@@ -119,6 +138,7 @@ soil3Dknn <- function(soil.fun, obs.data, pred.data, n.obs, depth.th, p, d, outp
 #' @param obs.data  Observation data. Tidy `data.frame` with the following columns: `ID`, `Top`, `Bottom`, `Target variable` column, `Covariates` columns, `x`, `y`, `depth`.
 #' @param params `data.frame` of possible values of tuning parameters (`depth.th`, `n.obs`, `p`, `d`).
 #' @param folds vector indicating which profiles belong to each fold.
+#' @param weights logical, if TRUE weights for gower distance components will be computed 
 #' @return `params` data.frame with the corresponding accuracy measures.
 #' @param parallel logical, if TRUE the computation will perform in parallel, Default: FALSE
 #' @param n.cores Number of cores for parallel computation, Default: 1
@@ -136,16 +156,16 @@ soil3Dknn <- function(soil.fun, obs.data, pred.data, n.obs, depth.th, p, d, outp
 #' @importFrom tibble rowid_to_column
 #' @importFrom purrr map
 #' @importFrom yardstick rsq rmse
-tune.soil3Dknn <- function(soil.fun, obs.data, params, folds, parallel = FALSE, n.cores = 1){
+tune.soil3Dknn <- function(soil.fun, obs.data, params, folds, weights = FALSE, parallel = FALSE, n.cores = 1){
   "%ni%" <- Negate("%in%")
   params <- params %>% dplyr::mutate(rsq = as.numeric(NA), rmse = as.numeric(NA))
   for(k in 1:dim(params)[1]){
     prediction <- data.frame()
     for(i in 1:length(unique(folds))){ 
       train_df_ID <- obs.data %>% dplyr::distinct(x, y, .keep_all = TRUE) %>% .[folds != i, "ID"] # OC mora genericki
-      train_df <- obs.data %>% dplyr::filter(ID %in% train_df_ID$ID)
-      pred_df <- obs.data %>% dplyr::filter(ID %ni% train_df_ID$ID)
-      pred_df <- soil3Dknn::soil3Dknn(soil.fun = soil.fun, obs.data = train_df, pred.data = pred_df, depth.th = params$depth.th[k], n.obs = params$n.obs[k], p = params$p[k], d = params$d[k], parallel = parallel, n.cores = n.cores)
+      train_df <- obs.data %>% dplyr::filter(ID %in% train_df_ID$ID) # obs.data[obs.data$ID %in% train_df$ID]
+      pred_df <- obs.data %>% dplyr::filter(ID %ni% train_df_ID$ID) # obs.data[obs.data$ID %ni% train_df$ID]
+      pred_df <- soil3Dknn::soil3Dknn(soil.fun = soil.fun, obs.data = train_df, pred.data = pred_df, depth.th = params$depth.th[k], n.obs = params$n.obs[k], p = params$p[k], d = params$d[k], weights = weights, parallel = parallel, n.cores = n.cores)
       prediction <- rbind(prediction, pred_df[, c("ID", "Top", "Bottom", all.vars(soil.fun)[1], "prediction")])
     }
     params[k, "rsq"] <- yardstick::rsq(prediction, truth = eval(parse(text = all.vars(soil.fun)[1])), estimate = prediction)[3]$.estimate
@@ -163,6 +183,7 @@ tune.soil3Dknn <- function(soil.fun, obs.data, params, folds, parallel = FALSE, 
 #' @param n.obs number of neighboring profiles.Tuning parameter.
 #' @param params `data.frame` of possible values of parameters (`depth.th`, `n.obs`, `d`, `p`).
 #' @param folds data.frame with two columns indicating which profiles belong to each fold in outer and inner loop of the nested cross-validation.
+#' @param weights logical, if TRUE weights for gower distance components will be computed
 #' @param parallel logical, if TRUE the computation will perform in parallel, Default: FALSE
 #' @param n.cores Number of cores for parallel computation, Default: 1
 #' @param measure Accuracy measure for model selection, Default: "rsq"
@@ -181,7 +202,7 @@ tune.soil3Dknn <- function(soil.fun, obs.data, params, folds, parallel = FALSE, 
 #' @importFrom tibble rowid_to_column
 #' @importFrom purrr map
 #' @importFrom yardstick rsq rmse
-ncv.soil3Dknn <- function(soil.fun, obs.data, params, folds, parallel = FALSE, n.cores = 1, measure = c("rsq", "rmse")){
+ncv.soil3Dknn <- function(soil.fun, obs.data, params, folds, weights = FALSE, parallel = FALSE, n.cores = 1, measure = c("rsq", "rmse")){
   measure <- measure[1]
   "%ni%" <- Negate("%in%")
   outer.results <- as.list(rep(NA, length(unique(folds$outer.fold))))
@@ -191,9 +212,9 @@ ncv.soil3Dknn <- function(soil.fun, obs.data, params, folds, parallel = FALSE, n
     train_df <- obs.data %>% dplyr::filter(ID %in% train_ID$ID)
     pred_df <- obs.data %>% dplyr::filter(ID %ni% train_ID$ID)
     inner.folds <- folds[folds$outer.fold != i, ] %>% .$inner.fold
-    tune.results <- soil3Dknn::tune.soil3Dknn(soil.fun = soil.fun, obs.data = train_df, folds = inner.folds, params = params, parallel = parallel, n.cores = n.cores)
+    tune.results <- soil3Dknn::tune.soil3Dknn(soil.fun = soil.fun, obs.data = train_df, folds = inner.folds, params = params, weights = weights, parallel = parallel, n.cores = n.cores)
     best.tune <- if(measure == "rsq"){tune.results[which.max(tune.results$rsq), 1:4]}else{tune.results[which.min(tune.results$rmse), 1:4]}
-    pred_df <- soil3Dknn::soil3Dknn(soil.fun = soil.fun, obs.data = train_df, pred.data = pred_df, depth.th = best.tune$depth.th, n.obs = best.tune$n.obs, p = best.tune$p, d = best.tune$d, output = "prediction", parallel = parallel, n.cores = n.cores)
+    pred_df <- soil3Dknn::soil3Dknn(soil.fun = soil.fun, obs.data = train_df, pred.data = pred_df, depth.th = best.tune$depth.th, n.obs = best.tune$n.obs, p = best.tune$p, d = best.tune$d, weights = weights, output = "prediction", parallel = parallel, n.cores = n.cores)
     outer.results[[i]] <- pred_df[, c("ID", "Top", "Bottom", all.vars(soil.fun)[1], "prediction")]
     best.params[[i]] <- best.tune
   }

@@ -9,9 +9,10 @@ soil3Dknn(
   obs.data,
   pred.data,
   n.obs,
-  depth_th = 10,
+  depth.th,
   p,
   d,
+  weights = FALSE,
   output = "prediction",
   parallel = FALSE,
   n.cores = 1
@@ -26,11 +27,13 @@ soil3Dknn(
 
 \item{n.obs}{number of neighboring profiles.Tuning parameter.}
 
-\item{depth_th}{depth threshold. Serves to define prediction depth interval: \verb{pdi = pred.data$depth +/- depth_th}, Tuning parameter, Default: 10}
+\item{depth.th}{depth threshold. Serves to define prediction depth interval: \verb{pdi = pred.data$depth +/- depth.th}, Tuning parameter, Default: 10}
 
 \item{p}{power of horizontal distance. Tuning parameter. Default: 1}
 
 \item{d}{power of vertical distance. Tuning parameter. Default: 1}
+
+\item{weights}{logical, if TRUE weights for gower distance components will be computed}
 
 \item{output}{prediction or preparation. If output = "prediction" prediction will be applied, Default: 'prediction'}
 

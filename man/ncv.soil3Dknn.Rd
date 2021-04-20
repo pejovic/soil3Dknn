@@ -4,20 +4,33 @@
 \alias{ncv.soil3Dknn}
 \title{ncv.soil3Dknn}
 \usage{
-ncv.soil3Dknn(soil.fun, obs.data, params, folds, parallel = FALSE, n.cores = 1)
+ncv.soil3Dknn(
+  soil.fun,
+  obs.data,
+  params,
+  folds,
+  weights = FALSE,
+  parallel = FALSE,
+  n.cores = 1,
+  measure = c("rsq", "rmse")
+)
 }
 \arguments{
 \item{soil.fun}{formula object that defines target and predictor variables which will be used in searching for neighboring profiles. (eg. \code{OC~x + y + DEM + TWI + depth}. In this case, \code{x}, \code{y}, \code{DEM} and \code{TWI} are included in the searching algorithm. \code{depth} is mandatory for 3D soil mapping.}
 
 \item{obs.data}{Observation data. Tidy \code{data.frame} with the following columns: \code{ID}, \code{Top}, \code{Bottom}, \verb{Target variable} column, \code{Covariates} columns, \code{x}, \code{y}, \code{depth}.}
 
-\item{params}{\code{data.frame} of possible values of parameters (\code{n.obs}, \code{depth_th}, \code{p}).}
+\item{params}{\code{data.frame} of possible values of parameters (\code{depth.th}, \code{n.obs}, \code{d}, \code{p}).}
 
 \item{folds}{data.frame with two columns indicating which profiles belong to each fold in outer and inner loop of the nested cross-validation.}
+
+\item{weights}{logical, if TRUE weights for gower distance components will be computed}
 
 \item{parallel}{logical, if TRUE the computation will perform in parallel, Default: FALSE}
 
 \item{n.cores}{Number of cores for parallel computation, Default: 1}
+
+\item{measure}{Accuracy measure for model selection, Default: "rsq"}
 
 \item{n.obs}{number of neighboring profiles.Tuning parameter.}
 }
